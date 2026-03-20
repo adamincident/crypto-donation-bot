@@ -1,0 +1,210 @@
+import requests
+import time
+
+# =========================
+# 🔑 TELEGRAM CONFIG
+# =========================
+BOT_TOKEN = "8213315809:AAEhd2K342Q0I_zwjSNCgS60o3120puXsYk"
+CHAT_ID = "1002612303342"
+
+# =========================
+# 💰 WALLETS
+# =========================
+WALLETS = {
+    "BTC": "bc1qzladm6tlghpyla8hu39dpmauyvh7pjlalst966",
+    "ETH": "0x57c2Ab87BBEBA1883839e2f41c496475F43d08F1",
+    "SOL": "ZN7w2xZwzGdh1SwF82wRC3gks2aXKxberv7jKpfuxJZ",
+    "XRP": "rtWRnkUtKkXoW1XAKGijg2YrfVTN1DdeS",
+    "TRON": "TH49G97WmokNHCCs5riC3Bcm4YSRiBTRQ2",
+    "LTC": "ltc1qn5jgcml0jru7thrqn0xcqanjnatsy3nuywdz83",
+    "TON": "UQBDi1h86Pr8Z-VEqwRdarKYx73r16GHph2g-OTRI4pMmNBg"
+}
+
+ETHERSCAN_API = "93HM46GZCS4PKHUPXENBQ9ESBWAPUT6S7Z"
+
+MIN_USD = 10
+CHECK_INTERVAL = 60
+
+seen_tx = set()
+
+# =========================
+# 📤 TELEGRAM
+# =========================
+def send(msg):
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+    requests.post(url, data={"chat_id": CHAT_ID, "text": msg})
+
+# =========================
+# 💵 PRICE
+# =========================
+def get_price(coin_id):
+    try:
+        r = requests.get(f"https://api.coingecko.com/api/v3/simple/price?ids={coin_id}&vs_currencies=usd")
+        return list(r.json().values())[0]["usd"]
+    except:
+        return 0
+
+# =========================
+# 🔍 ETH
+# =========================
+def check_eth():
+    url = f"https://api.etherscan.io/api?module=account&action=txlist&address={WALLETS['ETH']}&sort=desc&apikey={ETHERSCAN_API}"
+    data = requests.get(url).json()["result"][:3]
+
+    price = get_price("ethereum")
+
+    for tx in data:
+        if tx["hash"] in seen_tx:
+            continue
+
+        seen_tx.add(tx["hash"])
+
+        val = int(tx["value"]) / 1e18
+        usd = val * price
+
+        if usd >= MIN_USD:
+            send(f"💸 ETH\n{val:.4f} (~${usd:.2f})\nhttps://etherscan.io/tx/{tx['hash']}")
+
+# =========================
+# 🔍 BTC + LTC
+# =========================
+def check_utxo(coin, addr, coin_id, explorer):
+    try:
+        data = requests.get(f"https://blockchain.info/rawaddr/{addr}").json()
+        price = get_price(coin_id)
+
+        for tx in data["txs"][:3]:
+            if tx["hash"] in seen_tx:
+                continue
+
+            seen_tx.add(tx["hash"])
+
+            val = tx["result"] / 1e8
+            usd = val * price
+
+            if usd >= MIN_USD:
+                send(f"💸 {coin}\n{val:.5f} (~${usd:.2f})\n{explorer}{tx['hash']}")
+    except:
+        pass
+
+# =========================
+# 🔍 SOL
+# =========================
+def check_sol():
+    try:
+        url = f"https://public-api.solscan.io/account/transactions?account={WALLETS['SOL']}&limit=3"
+        data = requests.get(url).json()
+
+        price = get_price("solana")
+
+        for tx in data:
+            tx_hash = tx["txHash"]
+
+            if tx_hash in seen_tx:
+                continue
+
+            seen_tx.add(tx_hash)
+
+            lamports = tx.get("lamport", 0)
+            val = lamports / 1e9
+            usd = val * price
+
+            if usd >= MIN_USD:
+                send(f"💸 SOL\n{val:.4f} (~${usd:.2f})\nhttps://solscan.io/tx/{tx_hash}")
+    except:
+        pass
+
+# =========================
+# 🔍 XRP
+# =========================
+def check_xrp():
+    try:
+        url = f"https://data.ripple.com/v2/accounts/{WALLETS['XRP']}/transactions?limit=3"
+        data = requests.get(url).json()["transactions"]
+
+        price = get_price("ripple")
+
+        for tx in data:
+            tx_hash = tx["hash"]
+
+            if tx_hash in seen_tx:
+                continue
+
+            seen_tx.add(tx_hash)
+
+            amt = float(tx.get("tx", {}).get("Amount", 0)) / 1e6
+            usd = amt * price
+
+            if usd >= MIN_USD:
+                send(f"💸 XRP\n{amt:.2f} (~${usd:.2f})\nhttps://xrpscan.com/tx/{tx_hash}")
+    except:
+        pass
+
+# =========================
+# 🔍 TRON
+# =========================
+def check_tron():
+    try:
+        url = f"https://apilist.tronscan.org/api/transaction?address={WALLETS['TRON']}&limit=3"
+        data = requests.get(url).json()["data"]
+
+        price = get_price("tron")
+
+        for tx in data:
+            tx_hash = tx["hash"]
+
+            if tx_hash in seen_tx:
+                continue
+
+            seen_tx.add(tx_hash)
+
+            val = tx.get("amount", 0) / 1e6
+            usd = val * price
+
+            if usd >= MIN_USD:
+                send(f"💸 TRON\n{val:.2f} (~${usd:.2f})\nhttps://tronscan.org/#/transaction/{tx_hash}")
+    except:
+        pass
+
+# =========================
+# 🔍 TON
+# =========================
+def check_ton():
+    try:
+        url = f"https://toncenter.com/api/v2/getTransactions?address={WALLETS['TON']}&limit=3"
+        data = requests.get(url).json()["result"]
+
+        price = get_price("the-open-network")
+
+        for tx in data:
+            tx_hash = tx["transaction_id"]["hash"]
+
+            if tx_hash in seen_tx:
+                continue
+
+            seen_tx.add(tx_hash)
+
+            val = int(tx["in_msg"]["value"]) / 1e9
+            usd = val * price
+
+            if usd >= MIN_USD:
+                send(f"💸 TON\n{val:.2f} (~${usd:.2f})\nhttps://tonscan.org/tx/{tx_hash}")
+    except:
+        pass
+
+# =========================
+# 🔁 LOOP
+# =========================
+while True:
+    try:
+        check_eth()
+        check_utxo("BTC", WALLETS["BTC"], "bitcoin", "https://www.blockchain.com/btc/tx/")
+        check_utxo("LTC", WALLETS["LTC"], "litecoin", "https://blockchair.com/litecoin/transaction/")
+        check_sol()
+        check_xrp()
+        check_tron()
+        check_ton()
+    except Exception as e:
+        print("Error:", e)
+
+    time.sleep(CHECK_INTERVAL)
