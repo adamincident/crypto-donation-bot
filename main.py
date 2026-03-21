@@ -6,7 +6,7 @@ import time
 # =========================
 BOT_TOKEN = "8213315809:AAEhd2K342Q0I_zwjSNCgS60o3120puXsYk"
 CHAT_ID = "-1002612303342"
-send("🔥 TEST MESSAGE")
+
 # =========================
 # 💰 WALLETS
 # =========================
@@ -33,6 +33,7 @@ seen_tx = set()
 def send(msg):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     requests.post(url, data={"chat_id": CHAT_ID, "text": msg})
+    send("🔥 TEST MESSAGE")
 
 # =========================
 # 💵 PRICE
